@@ -1,0 +1,73 @@
+# Copyright (c) 2019, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# number of Micro Integrator pods
+replicaCount: 1
+
+images:
+  microIntegrator:
+    image: "wso2/micro-integrator"
+    imageTag: "1.1.0"
+    pullPolicy: IfNotPresent
+  initContainer:
+    image: "busybox"
+    imageTag: "1.31"
+
+capp:
+  # remote localtion for CApp
+  urls: ""
+
+#imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+livenessProbe:
+  initialDelaySeconds: 35
+  periodSeconds: 10
+
+readinessProbe:
+  initialDelaySeconds: 35
+  periodSeconds: 10
+
+minReadySeconds: 35
+
+strategy:
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+service:
+  # Micro Integrator service type
+  type: ClusterIP
+  # Micro Integrator service port
+  port: 8290
+
+ingress:
+  # enable an ingress to expose. If enabled, must set the service type to "ClusterIP".
+  enabled: true
+  # annotations for Ingress 
+  annotations: {}
+  # Host name of the ingress
+  host: "{{ .Release.Name }}.example.com"
+#  secret: ""
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 1000m
+    memory: 1Gi
+# deployment.toml remote location 
+deploymentTomlURL: ""
