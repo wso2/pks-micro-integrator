@@ -1,0 +1,127 @@
+# Copyright (c) 2019, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "micro-integrator.fullname" . }}
+  labels:
+{{ include "micro-integrator.labels" . | indent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  minReadySeconds: {{ .Values.minReadySeconds }}
+  strategy:
+    rollingUpdate:
+      maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavailable }}
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "micro-integrator.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "micro-integrator.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      securityContext:
+       runAsUser: 802
+    {{- if or (not (eq .Values.capp.urls "")) (not (eq .Values.deploymentTomlURL ""))}}
+      initContainers:
+      {{- if not (eq .Values.capp.urls "") }}
+        - name: init-download-capps
+          image: "{{ .Values.images.initContainer.image }}:{{ .Values.images.initContainer.imageTag }}"
+          command:
+            - /bin/sh
+            - "-c"
+            - |
+              set -e
+              wget -P /capps {{ .Values.capp.urls }}
+          volumeMounts:
+            - name: capp-download
+              mountPath: /capps
+      {{- end }}
+      {{- if not (eq .Values.deploymentTomlURL "") }}
+        - name: init-download-deployment-toml
+          image: "{{ .Values.images.initContainer.image }}:{{ .Values.images.initContainer.imageTag }}"
+          command:
+              - /bin/sh
+              - "-c"
+              - |
+                  set -e
+                  wget -P /conf {{ .Values.deploymentTomlURL }}
+          volumeMounts:
+              - name: deployment-toml-download
+                mountPath: /conf
+      {{- end }}
+    {{- end }}
+    {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.images.microIntegrator.image }}:{{ .Values.images.microIntegrator.imageTag }}"
+          imagePullPolicy: {{ .Values.images.microIntegrator.pullPolicy }}
+        {{- if not (eq .Values.deploymentTomlURL "") }}
+          command:
+            - /bin/sh
+            - "-c"
+            - |
+                set -e
+                cp /home/wso2carbon/conf/deployment.toml /home/wso2carbon/wso2mi/conf/
+                /home/wso2carbon/wso2mi/bin/micro-integrator.sh
+        {{- end}}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - nc -z localhost {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - nc -z localhost {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- if or (not (eq .Values.capp.urls "")) (not (eq .Values.deploymentTomlURL ""))}}
+          volumeMounts:
+          {{- if not (eq .Values.capp.urls "") }}
+            - name: capp-download
+              mountPath: /home/wso2carbon/wso2mi/repository/deployment/server/carbonapps
+          {{- end }}
+          {{- if not (eq .Values.deploymentTomlURL "") }}
+            - name: deployment-toml-download
+              mountPath: /home/wso2carbon/conf
+          {{- end }}
+      volumes:
+      {{- if not (eq .Values.capp.urls "") }}
+        - name: capp-download
+          emptyDir: {}
+      {{- end}}
+      {{- if not (eq .Values.deploymentTomlURL "") }}
+        - name: deployment-toml-download
+          emptyDir: {}
+      {{- end }}
+    {{- end }}
